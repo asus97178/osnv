@@ -11,6 +11,7 @@ import type { OrmCatalogScopeV1, OrmOwnedStoreDefinitionV1 } from "./OrmOwnedSto
 import { isDefinedOrmOwnedStoreV1 } from "./OrmOwnedStore";
 import { failure, postgresOwnedStoreCapability, type OwnedStoreCreateOperationV1, type OwnedStoreIdentityInsertV1, type OwnedStoreSecondaryLockEntryV1 } from "../Providers/ormOwnedStoreRuntime";
 import { OrmOwnedStoreAdmissionError } from "../errors";
+import { explainOwnedStoreFailureV1, type OwnedStoreObservationV1 } from "./OwnedStoreExplain";
 import { types } from "node:util";
 export interface PreparedOwnedStoreV1 {
   readonly definition: Readonly<OrmOwnedStoreDefinitionV1>;
@@ -44,9 +45,25 @@ type LeaseState = {
 const leaseStates = new WeakMap<object, LeaseState>();
 const leaseCounts = new WeakMap<DatabaseProvider, WeakMap<object, number>>();
 const preimages = new Map<string, Buffer>();
+/**
+ * Admits the declared stores. The checks below fail closed with bare codes;
+ * on failure the code is explained from the snapshots read so far (see
+ * OwnedStoreExplain), outside every provider callback.
+ */
 export async function admitOwnedStoresV1(provider: DatabaseProvider, request: OwnedStoreAdmissionRequestV1): Promise<CommittedOwnedStoreAdmissionV1> {
+  const observed: OwnedStoreObservationV1 = {};
+  try {
+    return await admitOwnedStoresCoreV1(provider, request, observed);
+  } catch (error) {
+    if (!(error instanceof OrmOwnedStoreAdmissionError) || Object.getPrototypeOf(error) !== OrmOwnedStoreAdmissionError.prototype) throw error;
+    throw explainOwnedStoreFailureV1(error.code, observed);
+  }
+}
+
+async function admitOwnedStoresCoreV1(provider: DatabaseProvider, request: OwnedStoreAdmissionRequestV1, observed: OwnedStoreObservationV1): Promise<CommittedOwnedStoreAdmissionV1> {
   const admitted = prepare(request);
   const prepared = admitted.prepared;
+  observed.stores = prepared;
   const signal = admitted.signal;
   if (aborted(signal))
     throw failure("ORM_OWNED_STORE_LOCK_UNAVAILABLE");
@@ -76,6 +93,7 @@ export async function admitOwnedStoresV1(provider: DatabaseProvider, request: Ow
         throw failure("ORM_OWNED_STORE_PROVIDER_UNSUPPORTED");
       const definitions = prepared.map(item => item.definition);
       const registry = await operational(() => session.inspectRegistry()).then(snapshot => parseOwnedStoreRegistrySnapshotV1(snapshot, definitions, context));
+      observed.registry = registry;
       if (registry.state.kind === "present")
         validateFixedRegistryShapeV1(registry.state.shape);
       assertCurrent(registry, prepared);
@@ -84,6 +102,7 @@ export async function admitOwnedStoresV1(provider: DatabaseProvider, request: Ow
       const plan = lockPlan(prepared, rows);
       const locked = await session.lockSecondary(plan);
       const catalogue = await operational(() => locked.inspectCatalog(catalogueScopes)).then(snapshot => parseOwnedStoreCatalogSnapshotV1(snapshot, context));
+      observed.catalogue = catalogue;
       const semantic: OwnedStoreCatalogSemanticContextV1 = Object.freeze({
         stores: Object.freeze(prepared.map(item => Object.freeze({ definition: item.definition, expectedSchema: item.expected }))), requestedScopes: catalogueScopes
       });

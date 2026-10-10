@@ -4,6 +4,31 @@ All notable changes to the `bazis` package. Versions follow
 [Semantic Versioning](https://semver.org); before 1.0 a minor version may
 contain breaking changes, a patch version does not.
 
+## 0.98.23 — 2026-10-11
+
+### Fixed
+
+- Owned-store errors explain themselves. Before, the message was the bare
+  code: `OrmOwnedStoreAdmissionError: ORM_OWNED_STORE_IDENTITY_MISMATCH`. The
+  code still comes first, followed by the store, its scope, the reason and the
+  way forward, for example `ORM_OWNED_STORE_IDENTITY_MISMATCH: Owned store
+  "acme.notes" (schema "public", prefix "notes_"): its model changed since the
+  store was created … An owned store does not change in place: declare a new
+  storeKey with a tablePrefix that does not overlap the old one, move the
+  data, then drop the old tables and their row in __bazis_orm_owned_stores_v1`.
+  Also explained: a changed format version, unregistered tables in the scope
+  (listed), a prefix overlapping a registered store (`notes_` and `notes_v2_`
+  overlap), leftovers of a `rejectIfPresent` scope, an entity table outside
+  the prefix, a store key declared twice, an ordinary context mapping a store
+  table, and every invalid field of `defineOrmOwnedStoreV1`. Names read from
+  the database are escaped and bounded; row values and driver text are never
+  included, and an object with a forged name is not echoed.
+- `ownedStore` together with `ensureCreated`, `migrateOnStart`, migrations or
+  its own `provider` says which option to remove instead of `cannot compose
+  startup schema or migration authority`.
+- A startup failure whose message already starts with its code is not
+  prefixed with the code a second time.
+
 ## 0.98.22 — 2026-10-10
 
 ### Added

@@ -41,9 +41,13 @@ const PAYLOAD = Symbol("bazis.orm.owned-store");
 const CHANNEL = createModuleOwnedMetadataChannel<OrmGraphContribution>("orm.owned-store");
 const compiled = new WeakMap<object, CompiledOwnedStoreGraph>();
 
-function fail(code: "ORM_OWNED_STORE_IDENTITY_MISMATCH" | "ORM_OWNED_STORE_OWNERSHIP_CONFLICT"): never {
-  throw new OrmOwnedStoreAdmissionError(code, code);
+/** Names here come from the application's own declarations, never from the database. */
+function fail(code: "ORM_OWNED_STORE_IDENTITY_MISMATCH" | "ORM_OWNED_STORE_OWNERSHIP_CONFLICT", reason?: string): never {
+  throw new OrmOwnedStoreAdmissionError(code, reason === undefined ? code : `${code}: ${reason}.`);
 }
+const storeName = (definition: Readonly<OrmOwnedStoreDefinitionV1>) => `Owned store "${definition.storeKey}" (schema "${definition.ownedScope.schema}", prefix "${definition.ownedScope.tablePrefix}")`;
+const scopeName = (scope: { readonly schema: string; readonly tablePrefix: string }) => `schema "${scope.schema}", prefix "${scope.tablePrefix}"`;
+const OVERLAP_HINT = "two prefixes overlap when one starts with the other, so \"notes_\" and \"notes_v2_\" overlap while \"notes_\" and \"notesv2_\" do not";
 
 function overlaps(a: { readonly schema: string; readonly tablePrefix: string }, b: { readonly schema: string; readonly tablePrefix: string }): boolean {
   return a.schema === b.schema && (a.tablePrefix.startsWith(b.tablePrefix) || b.tablePrefix.startsWith(a.tablePrefix));
@@ -52,7 +56,7 @@ function overlaps(a: { readonly schema: string; readonly tablePrefix: string }, 
 function snapshot<TContext extends DbContext>(context: ContextClass<TContext>, entities: readonly EntityClass[], source: unknown): OwnedStoreRegistration<TContext> {
   const definition = isDefinedOrmOwnedStoreV1(source) ? source : defineOrmOwnedStoreV1(source as OrmOwnedStoreDefinitionV1);
   const expected = compileExpectedSchema(new OrmModel(entities));
-  if (expected.tables.length === 0 || expected.tables.length > 512) fail("ORM_OWNED_STORE_IDENTITY_MISMATCH");
+  if (expected.tables.length === 0 || expected.tables.length > 512) fail("ORM_OWNED_STORE_IDENTITY_MISMATCH", `${storeName(definition)} needs 1 to 512 entities, got ${expected.tables.length}`);
   return Object.freeze({ identity: Object.freeze({}), context, entities: Object.freeze([...entities]), definition, expected, source });
 }
 
@@ -91,11 +95,11 @@ export function revalidateOwnedStoreRegistration(registration: OwnedStoreRegistr
     && current.definition.ownedScope.schema === registration.definition.ownedScope.schema
     && current.definition.ownedScope.tablePrefix === registration.definition.ownedScope.tablePrefix
     && JSON.stringify(current.definition.rejectIfPresent ?? []) === JSON.stringify(registration.definition.rejectIfPresent ?? []);
-  if (!sameDefinition || current.expected.tables.length !== registration.expected.tables.length) fail("ORM_OWNED_STORE_IDENTITY_MISMATCH");
+  if (!sameDefinition || current.expected.tables.length !== registration.expected.tables.length) fail("ORM_OWNED_STORE_IDENTITY_MISMATCH", `${storeName(registration.definition)}: its definition or entities changed after the module was declared; declare them once`);
   for (let index = 0; index < current.expected.tables.length; index += 1) {
     const before = registration.expected.tables[index];
     const after = current.expected.tables[index];
-    if (before?.schema !== after?.schema || before?.table !== after?.table) fail("ORM_OWNED_STORE_IDENTITY_MISMATCH");
+    if (before?.schema !== after?.schema || before?.table !== after?.table) fail("ORM_OWNED_STORE_IDENTITY_MISMATCH", `${storeName(registration.definition)}: its entities changed after the module was declared; declare them once`);
   }
 }
 
@@ -106,30 +110,37 @@ export function ownedStoreRegistrations(snapshot: ModuleOwnedContributionSnapsho
   const graph = contributions.map((entry) => entry.payload);
   const records = graph.flatMap((entry) => entry.owned === undefined ? [] : [entry.owned]);
   if (records.length === 0) return Object.freeze([]);
-  if (records.length > 128) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT");
+  if (records.length > 128) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `An application may declare at most 128 owned stores, got ${records.length}`);
   const keys = new Set<string>();
   const tables = new Set<string>();
   for (const record of records) {
     revalidateOwnedStoreRegistration(record);
     if (record.definition.ownedScope.schema === "public"
       && ["__bazis_orm_owned_stores_v1", "__bazis_orm_owned_stores_v1_pkey"].some((name) => name.startsWith(record.definition.ownedScope.tablePrefix))) {
-      fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT");
+      fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `${storeName(record.definition)} would own the bazis registry table __bazis_orm_owned_stores_v1; choose another tablePrefix`);
     }
     if ((record.definition.rejectIfPresent ?? []).some((scope) => scope.schema === "public"
       && ["__bazis_orm_owned_stores_v1", "__bazis_orm_owned_stores_v1_pkey"].some((name) => name.startsWith(scope.tablePrefix)))) {
-      fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT");
+      fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `${storeName(record.definition)}: rejectIfPresent would cover the bazis registry table __bazis_orm_owned_stores_v1`);
     }
-    if ((record.definition.rejectIfPresent ?? []).some((scope) => overlaps(record.definition.ownedScope, scope))) {
-      fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT");
+    const rejectedOwn = (record.definition.rejectIfPresent ?? []).find((scope) => overlaps(record.definition.ownedScope, scope));
+    if (rejectedOwn) {
+      fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `${storeName(record.definition)}: rejectIfPresent (${scopeName(rejectedOwn)}) overlaps its own scope; ${OVERLAP_HINT}`);
     }
-    if (keys.has(record.definition.storeKey)) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT");
+    if (keys.has(record.definition.storeKey)) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `Owned store key "${record.definition.storeKey}" is declared by more than one ormBazis entry`);
     keys.add(record.definition.storeKey);
-    for (const other of records) if (other !== record && (overlaps(record.definition.ownedScope, other.definition.ownedScope) || (other.definition.rejectIfPresent ?? []).some((scope) => overlaps(record.definition.ownedScope, scope)))) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT");
+    for (const other of records) {
+      if (other === record) continue;
+      if (overlaps(record.definition.ownedScope, other.definition.ownedScope)) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `${storeName(record.definition)} overlaps the scope of owned store "${other.definition.storeKey}" (${scopeName(other.definition.ownedScope)}); ${OVERLAP_HINT}`);
+      const rejected = (other.definition.rejectIfPresent ?? []).find((scope) => overlaps(record.definition.ownedScope, scope));
+      if (rejected) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `${storeName(record.definition)} lies in a scope that owned store "${other.definition.storeKey}" rejects (${scopeName(rejected)})`);
+    }
     for (const table of record.expected.tables) {
       const key = `${table.schema}.${table.table}`;
-      if (tables.has(key) || table.schema !== record.definition.ownedScope.schema || !table.table.startsWith(record.definition.ownedScope.tablePrefix)) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT");
+      if (tables.has(key)) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `Table "${table.schema}"."${table.table}" is mapped by more than one owned store entity`);
+      if (table.schema !== record.definition.ownedScope.schema || !table.table.startsWith(record.definition.ownedScope.tablePrefix)) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `${storeName(record.definition)}: entity table "${table.schema}"."${table.table}" lies outside the store scope; name its tables with the prefix, for example "${record.definition.ownedScope.tablePrefix}${table.table}"`);
       tables.add(key);
-      for (const foreignKey of table.foreignKeys) if (foreignKey.target.schema !== record.definition.ownedScope.schema || !foreignKey.target.table.startsWith(record.definition.ownedScope.tablePrefix)) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT");
+      for (const foreignKey of table.foreignKeys) if (foreignKey.target.schema !== record.definition.ownedScope.schema || !foreignKey.target.table.startsWith(record.definition.ownedScope.tablePrefix)) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `${storeName(record.definition)}: table "${table.table}" has a foreign key to "${foreignKey.target.schema}"."${foreignKey.target.table}" outside the store; an owned store references only its own tables`);
     }
   }
   // The complete ORM graph is compiled only when an owned store is present. This
@@ -156,7 +167,8 @@ export function ownedStoreRegistrations(snapshot: ModuleOwnedContributionSnapsho
     for (const table of expected.tables) {
       const owner = records.find((record) => table.schema === record.definition.ownedScope.schema && table.table.startsWith(record.definition.ownedScope.tablePrefix));
       const rejected = records.some((record) => (record.definition.rejectIfPresent ?? []).some((scope) => table.schema === scope.schema && table.table.startsWith(scope.tablePrefix)));
-      if ((owner && owner !== entry.owned) || rejected) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT");
+      if (owner && owner !== entry.owned) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `${entry.context.name} maps table "${table.schema}"."${table.table}", which belongs to owned store "${owner.definition.storeKey}"; only the store's own context may map it`);
+      if (rejected) fail("ORM_OWNED_STORE_OWNERSHIP_CONFLICT", `${entry.context.name} maps table "${table.schema}"."${table.table}" in a scope an owned store rejects (rejectIfPresent)`);
     }
   }
   const result = Object.freeze(records);

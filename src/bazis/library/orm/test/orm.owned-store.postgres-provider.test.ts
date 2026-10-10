@@ -11,7 +11,7 @@ import type { OrmExpectedSchema } from "../Schema/ExpectedSchema";
 function ownedError(error: unknown, code: OrmOwnedStoreAdmissionError["code"]): void {
   expect(error).toBeInstanceOf(OrmOwnedStoreAdmissionError);
   if (!(error instanceof OrmOwnedStoreAdmissionError)) throw new Error("missing owned-store error");
-  expect(error.code).toBe(code); expect(error.message).toBe(code); expect(Object.hasOwn(error, "cause")).toBe(false);
+  expect(error.code).toBe(code); expect(error.message === code || error.message.startsWith(`${code}: `)).toBe(true); expect(Object.hasOwn(error, "cause")).toBe(false);
 }
 
 function registryProjectorSqlFacts(sql: string, params: readonly unknown[]): unknown[] | undefined {

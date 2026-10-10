@@ -451,3 +451,31 @@ covers the baseline, the existing-database order, three racing starts and a
 failed migration;
 [orm.schema-plan-messages.test.ts](../../core/orm/test/orm.schema-plan-messages.test.ts)
 covers the module options and the hosted plan.
+
+## 14. Readable owned-store errors (2026-10-11)
+
+Owned-store checks keep failing closed with bare codes: `safe()`, the
+provider callback guard and the catalogue parsers still require an error
+whose message is exactly its code, so no foreign text crosses those
+boundaries. Since 0.98.23 the code is explained afterwards:
+
+- `admitOwnedStoresV1` records the parsed registry and catalogue snapshots it
+  has read and, on failure, `OwnedStoreExplain.explainOwnedStoreFailureV1`
+  recomputes the likely reason from them (changed model, format version or
+  scope; unregistered tables; an overlapping registered store; leftovers of a
+  rejected scope; an unreadable catalogue). It only names a cause it can see
+  in the snapshots and otherwise gives the generic text for the code;
+- definition and module-graph checks (`defineOrmOwnedStoreV1`,
+  `ownedStoreContributions`) name fields, stores and tables directly — those
+  names come from the application's own declarations.
+
+The message keeps the code first (`ORM_OWNED_STORE_DRIFT: …`), `cause` stays
+absent. Store keys and prefixes are validated by `defineOrmOwnedStoreV1`;
+names read from the database are `JSON.stringify`-escaped, cut at 63
+characters and listed at most five at a time; row values and driver text are
+never included. A catalogue object the parsers refuse (a forged name, an
+unexpected shape) is not echoed: the message says the scope contains an object
+bazis does not read. Checks:
+[orm.owned-store.messages.test.ts](../../core/orm/test/orm.owned-store.messages.test.ts)
+and the live
+[orm.owned-store.messages.postgres.live.test.ts](../../core/orm/test/orm.owned-store.messages.postgres.live.test.ts).
