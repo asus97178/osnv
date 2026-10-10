@@ -66,7 +66,10 @@ describe("JWT trusted key lifecycle", () => {
   });
 
   test("invalid public PEM fails before publishing a verifier", async () => {
-    await expect(JwtKeyRing.create({ keys: [{ keyId: "rsa", algorithm: rs256({ publicKeyPem: "broken" }) }] })).rejects.toBeDefined();
+    // Since 0.98.26 the PEM is checked when the algorithm is created, before any ring exists.
+    expect(() => rs256({ publicKeyPem: "broken" })).toThrow(TypeError);
+    const undecodable = "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----";
+    await expect(JwtKeyRing.create({ keys: [{ keyId: "rsa", algorithm: rs256({ publicKeyPem: undecodable }) }] })).rejects.toBeDefined();
   });
 
   test("unknown/missing ids and algorithm confusion are rejected before verification", async () => {

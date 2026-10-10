@@ -11,6 +11,8 @@ contain breaking changes, a patch version does not.
 - `bearerToken(ctx)` in `bazis/core/http`: the token of an `Authorization:
   Bearer <token>` header, or `undefined` without the header, with another
   scheme or with an empty token. The scheme is case-insensitive.
+- `rs256()` accepts a PEM with literal `\n` sequences (a key stored on one line
+  in `.env` or a CI secret) and CRLF line breaks.
 
 ### Fixed
 
@@ -19,6 +21,12 @@ contain breaking changes, a patch version does not.
   server failure when the check did not catch it. It is now `401
   Unauthorized` with `WWW-Authenticate: Bearer`; the JWT error is the `cause`.
   Other errors of a check are unchanged.
+- `rs256()` checks its keys when it is created instead of failing on the first
+  token with `DOMException: Invalid keyData`. A PKCS#1 key (`BEGIN RSA PRIVATE
+  KEY`), an encrypted key, swapped private and public keys or a non-PEM string
+  now give a `TypeError` with the fix, for example `convert it to PKCS#8:
+  openssl pkcs8 -topk8 -nocrypt -in key.pem -out key-pkcs8.pem`. A key that
+  still fails to import names itself.
 
 ## 0.98.25 — 2026-10-11
 
