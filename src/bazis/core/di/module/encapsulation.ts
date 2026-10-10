@@ -84,7 +84,9 @@ export function validateModuleEncapsulation(
         if (isFamilyExport(ref)) {
           continue;
         }
-        if (record.providedTokens.has(ref) || visible.has(ref)) {
+        // A closed token of a visible family (`repositoryFor(Product)` next to an
+        // `ormBazis` that exports the whole `IRepository` family) may be passed on alone.
+        if (record.providedTokens.has(ref) || visible.has(ref) || (typeof ref !== "function" && ref.genericFamilyId !== undefined && allProvidedTokens.has(ref) && visibleFamilies(record).has(ref.genericFamilyId))) {
           result.add(ref);
         } else {
           issues.push(
@@ -173,6 +175,10 @@ export function validateModuleEncapsulation(
   // Why a provided token is not visible: the owner does not export it, or the
   // consumer module does not import the owner. Both used to read "not exported".
   const explainHidden = (token: Token<unknown>, consumer: ModuleGraphRecord): string => {
+    if (typeof token !== "function" && token.genericFamilyId !== undefined) {
+      const family = explainHiddenFamily(token, token.genericFamilyId, consumer);
+      if (family !== undefined) return family;
+    }
     // A module the consumer imports already sees the token but does not pass it
     // on. That export is the fix, whatever inner module (an `ormBazis` feature
     // module, say) registered the token.
@@ -186,6 +192,31 @@ export function validateModuleEncapsulation(
     return exportedTokens(owner).has(token)
       ? `which module "${owner.name}" exports, but "${consumer.name}" does not list "${owner.name}" in its imports. Add "${owner.name}" to the imports of "${consumer.name}".`
       : `which module "${owner.name}" provides but does not export. Add it to the exports of "${owner.name}".`;
+  };
+
+  // A closed token (`IRepository<Product>`) travels with its family export, so
+  // the fix is named in family terms and skips unnamed inner modules such as
+  // the one `ormBazis` creates.
+  const explainHiddenFamily = (token: Token<unknown>, familyId: symbol, consumer: ModuleGraphRecord): string | undefined => {
+    const closed = tokenToDebugName(token);
+    const family = closed.includes("<") ? closed.slice(0, closed.indexOf("<")) : closed;
+    const exportFix = `${family} (or only ${closed})`;
+    const sees = (record: ModuleGraphRecord) => visibleFamilies(record).has(familyId) || visibleTokens(record).has(token);
+    const passes = (record: ModuleGraphRecord) => exportedFamilies(record).has(familyId) || exportedTokens(record).has(token);
+    const named = (record: ModuleGraphRecord) => !/^module#\d+$/.test(record.name);
+    const blocking = consumer.imports.find((imported) => named(imported) && sees(imported) && !passes(imported));
+    if (blocking !== undefined) {
+      return `which its import "${blocking.name}" receives from its own imports but does not export. Add ${exportFix} to the exports of "${blocking.name}".`;
+    }
+    const exporter = records.find((record) => record !== consumer && named(record) && passes(record));
+    if (exporter !== undefined) {
+      return `which module "${exporter.name}" exports, but "${consumer.name}" does not list "${exporter.name}" in its imports. Add "${exporter.name}" to the imports of "${consumer.name}".`;
+    }
+    const host = records.find((record) => record !== consumer && named(record) && sees(record));
+    if (host !== undefined) {
+      return `which module "${host.name}" receives from its own imports but does not export. Add ${exportFix} to the exports of "${host.name}" and "${host.name}" to the imports of "${consumer.name}".`;
+    }
+    return undefined;
   };
 
   const contexts = new Map<ModuleGraphRecord, DependencyCheckContext>();
@@ -302,7 +333,7 @@ function checkDependency(
       !context.familiesVisible.has(token.genericFamilyId)
     ) {
       context.issues.push(
-        `Module "${record.name}": "${consumer}" depends on open generic "${tokenToDebugName(token)}", whose family is not exported by any imported module.`,
+        `Module "${record.name}": "${consumer}" depends on "${tokenToDebugName(token)}", ${context.explainHidden(token, record)}`,
       );
     }
     return;
@@ -363,6 +394,7 @@ export function computeModuleVisibleTokens(
 ): Map<ModuleGraphRecord, Set<Token<unknown>>> {
   const exportedMemo = new Map<ModuleGraphRecord, Set<Token<unknown>>>();
   const visiting = new Set<ModuleGraphRecord>();
+  const allProvided = new Set<Token<unknown>>(records.flatMap((record) => [...record.providedTokens]));
 
   const visibleOf = (record: ModuleGraphRecord): Set<Token<unknown>> => {
     const result = new Set<Token<unknown>>(record.providedTokens);
@@ -401,7 +433,8 @@ export function computeModuleVisibleTokens(
         if (isFamilyExport(ref)) {
           continue;
         }
-        if (record.providedTokens.has(ref) || visible.has(ref)) {
+        // Validation already admitted closed tokens re-exported from a visible family.
+        if (record.providedTokens.has(ref) || visible.has(ref) || (typeof ref !== "function" && ref.genericFamilyId !== undefined && allProvided.has(ref))) {
           result.add(ref);
         }
       }

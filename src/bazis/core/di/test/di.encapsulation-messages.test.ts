@@ -81,3 +81,24 @@ test("the same for a keyed registration", () => {
     `"Report" depends on "IClock" with key "main", but "IClock" with key "main" is registered in "ClockModule" and "AppModule"`,
   );
 });
+
+test("a closed generic token names the module to export its family from, skipping unnamed inner modules", async () => {
+  const { createOpenGenericTokenFamily } = await import("../index");
+  const Store = createOpenGenericTokenFamily<object, string>("Store");
+  class Item {}
+  const ITEM_STORE = Store.of(Item as never);
+  const inner = { providers: [singletonValue(ITEM_STORE, "items")], exports: [Store] };
+  @Module({ imports: [inner], exports: [] })
+  class ItemsModule {}
+  @Module({ imports: [ItemsModule], providers: [DI.singleton(DI.factoryProvider(REPORT, [ITEM_STORE], (store) => store))], exports: [] })
+  class ReportModule {}
+  const message = messageOf(() => createContainer(ReportModule));
+  expect(message).toContain(`Module "ReportModule": "Report" depends on "Store<Item>", which its import "ItemsModule" receives from its own imports but does not export. Add Store (or only Store<Item>) to the exports of "ItemsModule".`);
+  expect(message).not.toContain("module#");
+
+  @Module({ imports: [inner], exports: [ITEM_STORE] })
+  class OneStoreModule {}
+  @Module({ imports: [OneStoreModule], providers: [DI.singleton(DI.factoryProvider(REPORT, [ITEM_STORE], (store) => store))], exports: [] })
+  class OneStoreReport {}
+  expect(createContainer(OneStoreReport).resolve(REPORT)).toBe("items");
+});

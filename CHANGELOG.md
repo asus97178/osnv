@@ -4,6 +4,30 @@ All notable changes to the `bazis` package. Versions follow
 [Semantic Versioning](https://semver.org); before 1.0 a minor version may
 contain breaking changes, a patch version does not.
 
+## 0.98.22 — 2026-10-10
+
+### Added
+
+- A module can pass on the repository of one entity: `exports:
+  [repositoryFor(Product)]` next to `ormBazis`. Before, only `exports:
+  [IRepository]` worked, which opens the repositories of every entity of the
+  context; the single one failed with `exports "IRepository<Product>" which it
+  neither provides nor imports`. The same holds for any closed token of an
+  open generic family.
+
+### Fixed
+
+- A repository (or any closed generic token) hidden by module encapsulation
+  pointed at the unnamed module `ormBazis` creates: `which module "module#10"
+  provides but does not export. Add it to the exports of "module#10".` It now
+  names the module to change: `which its import "CatalogModule" receives from
+  its own imports but does not export. Add IRepository (or only
+  IRepository<Product>) to the exports of "CatalogModule".`, or the module to
+  import when the exporter is not imported.
+- A repository nobody registers (`registerRepositories: false`, or an entity
+  outside every `ormBazis`) explains where repositories come from instead of
+  only `No provider token found for named dependency "IRepository<Product>".`
+
 ## 0.98.21 — 2026-10-10
 
 ### Added
