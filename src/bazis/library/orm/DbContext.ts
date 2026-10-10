@@ -59,7 +59,7 @@ export abstract class DbContext {
   setByName(name: string): DbSet<Record<string, unknown>> {
     const model = this.#options.model.tryByName(name);
     if (!model) {
-      throw new EntityNotMappedError(name);
+      throw new EntityNotMappedError(name, "dynamic");
     }
     return new DbSet<Record<string, unknown>>(model, this.#runtime);
   }

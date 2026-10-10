@@ -184,13 +184,12 @@ function buildDynamicModelWithCtor(
   const keys = properties.filter((property) => property.isKey);
   if (def.primaryKey && keys.length > 0) throw new ModelBuildError(`Dynamic table "${def.name}" cannot combine primaryKey with legacy isKey.`);
   if (keys.length === 0 && !def.primaryKey) {
-    throw new ModelBuildError(`Dynamic table "${def.name}" has no primary key. Mark one field with isKey.`);
+    throw new ModelBuildError(`Dynamic table "${def.name}" has no primary key. Mark one field with isKey, or set primaryKey: { properties: [...] }.`);
   }
   if (keys.length > 1) {
+    const names = keys.map((key) => key.propertyName);
     throw new ModelBuildError(
-      `Dynamic table "${def.name}" declares multiple keys ("${keys
-        .map((key) => key.propertyName)
-        .join('", "')}"). Composite keys are not supported.`,
+      `Dynamic table "${def.name}" declares several isKey fields ("${names.join('", "')}"). Mark one field with isKey, or for a composite key use primaryKey: { properties: ["${names.join('", "')}"] }.`,
     );
   }
   const key = keys[0];

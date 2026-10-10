@@ -4,6 +4,22 @@ All notable changes to the `bazis` package. Versions follow
 [Semantic Versioning](https://semver.org); before 1.0 a minor version may
 contain breaking changes, a patch version does not.
 
+## 0.98.24 — 2026-10-11
+
+### Fixed
+
+- A dynamic table with several `isKey` fields said `Composite keys are not
+  supported.`, although `primaryKey: { properties: [...] }` supports them. It
+  now points to `primaryKey`; a table without a key mentions it as well.
+- `db.setByName("Tickets")` for an unregistered name advised `Add it to
+  ormModule({ entities: [...] }) and annotate it with @Entity()`. It now says
+  no entity or dynamic model has that name and shows
+  `options.model.registerModel(buildDynamicModel(...))`.
+- `db.add(row)` with a plain object (a row of a dynamic table) said `Type
+  "Object" is not mapped`, and an object without a prototype failed with a
+  `TypeError`. Both now point to `db.setByName("Table").add(row)`.
+  `EntityNotMappedError` stays the error class.
+
 ## 0.98.23 — 2026-10-11
 
 ### Fixed
