@@ -82,6 +82,9 @@ const DataModule = ormModule({
 ```
 
 `ormModule` exports the `IRepository` family token so importing modules can inject `repositoryFor(User)`.
+A feature module that declares `ormBazis` passes repositories on with its own
+`exports`: `exports: [IRepository]` opens the repositories of all its entities,
+`exports: [repositoryFor(User)]` (since 0.98.22) only that one.
 
 Turning repositories off:
 
