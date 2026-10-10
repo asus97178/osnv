@@ -5,11 +5,20 @@ import type { TransactionCallback } from "./types";
 export class TransactionOutcomeUnknownError extends DbUpdateError {
   readonly code = "ORM_TRANSACTION_OUTCOME_UNKNOWN";
   readonly outcome = "unknown";
-  constructor(override readonly cause?: unknown, readonly phase: "commit" | "cancellation" = "commit") {
+  /** `statement`: a statement sent outside a transaction got no answer (a timeout or a lost connection). */
+  constructor(override readonly cause?: unknown, readonly phase: "commit" | "cancellation" | "statement" = "commit") {
     super(phase === "commit"
       ? "Transaction outcome is unknown. Reconcile database state and use a new DbContext before saving again."
-      : "Transaction cancellation is unconfirmed. Reconcile database state and use a new DbContext before saving again.");
+      : phase === "statement"
+        ? `The database did not answer a statement sent outside a transaction${statementReason(cause)}. If the statement changed data, its outcome is unknown: check the data and use a new DbContext before saving again.`
+        : "Transaction cancellation is unconfirmed. Reconcile database state and use a new DbContext before saving again.");
   }
+}
+
+function statementReason(cause: unknown): string {
+  if (!(cause instanceof Error) || cause.message === "") return "";
+  const message = cause.message.replace(/\.$/, "");
+  return `: ${cause.name === "Error" || cause.name.startsWith("Orm") ? message : `${cause.name}: ${message}`}`;
 }
 
 export function isUnknownTransactionOutcome(error: unknown): boolean {

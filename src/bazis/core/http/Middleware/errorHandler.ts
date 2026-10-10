@@ -20,6 +20,13 @@ export interface ErrorHandlerOptions {
   /** Replaces the built-in logging of unexpected errors. */
   logError?: (error: unknown) => void;
   /**
+   * Status for a non-{@link HttpError} failure, for example
+   * `databaseErrorStatus` from `bazis/core/orm`; `undefined` keeps 500. The
+   * body stays the standard reason phrase. A mapped 4xx is the client's
+   * mistake and is not logged or sent to `onUnexpectedError`.
+   */
+  status?: (error: unknown) => number | undefined;
+  /**
    * Logger for unexpected errors when {@link logError} is absent: one `error`
    * line with the method, path, request id and the redacted error. The server
    * passes the application `LOGGER`; without either, `console.error` is used.
@@ -124,8 +131,8 @@ export function errorHandler(options: ErrorHandlerOptions = {}): HttpMiddleware 
         );
         return;
       }
-      safelyReportUnexpected(options, log, ctx, error);
-      const [status, title] = unexpectedStatus(error);
+      const [status, title] = unexpectedStatus(error, options.status);
+      if (status >= 500) safelyReportUnexpected(options, log, ctx, error);
       ctx.response = options.exposeDetails
         ? safeJsonResponse(status, {
             error: title,
@@ -146,9 +153,17 @@ export function errorHandler(options: ErrorHandlerOptions = {}): HttpMiddleware 
  * and stays 500, like everything else. Upstream details never reach the
  * client; the log keeps the full error.
  */
-function unexpectedStatus(error: unknown): readonly [number, string] {
+const REASONS: Readonly<Record<number, string>> = {
+  400: "Bad Request", 404: "Not Found", 409: "Conflict", 410: "Gone", 412: "Precondition Failed", 422: "Unprocessable Content",
+  423: "Locked", 429: "Too Many Requests", 500: "Internal Server Error", 502: "Bad Gateway", 503: "Service Unavailable", 504: "Gateway Timeout",
+};
+
+function unexpectedStatus(error: unknown, mapper?: (error: unknown) => number | undefined): readonly [number, string] {
   if (error instanceof HttpClientError && error.code !== undefined) {
     return error.code === HttpErrorCode.Timeout ? [504, "Gateway Timeout"] : [502, "Bad Gateway"];
   }
+  let mapped: number | undefined;
+  try { mapped = mapper?.(error); } catch { mapped = undefined; }
+  if (mapped !== undefined && Number.isInteger(mapped) && mapped >= 400 && mapped <= 599) return [mapped, REASONS[mapped] ?? (mapped >= 500 ? "Server Error" : "Client Error")];
   return [500, "Internal Server Error"];
 }

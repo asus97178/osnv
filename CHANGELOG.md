@@ -4,6 +4,35 @@ All notable changes to the `bazis` package. Versions follow
 [Semantic Versioning](https://semver.org); before 1.0 a minor version may
 contain breaking changes, a patch version does not.
 
+## 0.98.25 — 2026-10-11
+
+### Added
+
+- `ForeignKeyViolationError`, `CheckViolationError`, `NotNullViolationError`
+  (with `constraint`/`column` and `table`) and `LockTimeoutError`. Like
+  `UniqueViolationError` they replace the raw `PostgresError` for SQLSTATE
+  23503, 23514, 23502 and 55P03 in every context operation: `saveChanges`,
+  queries, immediate mutations and raw SQL. The driver error is `cause`, its
+  `errno`/`code` are kept; messages name the constraint or column, never row
+  values. `translateDatabaseError(error)` does the same for your own code.
+- `http: { errorHandler: { status } }` maps a non-`HttpError` failure to a
+  status (`undefined` keeps 500); the body stays the reason phrase, and a mapped
+  4xx is not logged as an unexpected error. `databaseErrorStatus` from
+  `bazis/core/orm` is a ready map: 409 for unique and foreign key violations,
+  422 for check, not-null and entity validation failures, 404 for `first()`
+  without a row, 503 when the database did not answer, a lock or transaction
+  timed out, or for a serialization failure or deadlock. Off by default.
+
+### Fixed
+
+- A statement sent outside a transaction that got no answer (the database is
+  down, `operationTimeoutMs` expired) said `Transaction outcome is unknown.`
+  It now says `The database did not answer a statement sent outside a
+  transaction: ORM operation timed out after 5000 ms. If the statement changed
+  data, its outcome is unknown …`. `TransactionOutcomeUnknownError.phase` is
+  `"statement"` for this case (was `"commit"`); the class and the rule that
+  such a context accepts no more work are unchanged.
+
 ## 0.98.24 — 2026-10-11
 
 ### Fixed
