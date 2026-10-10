@@ -96,9 +96,14 @@ export class EntityNotFoundError extends OrmError {
 
 /** The class is not registered as an entity in this context. */
 export class EntityNotMappedError extends OrmError {
-  constructor(name: string) {
+  /** `dynamic`: looked up by name through `setByName`; `plain`: a plain object, not an entity instance. */
+  constructor(name: string, kind: "class" | "dynamic" | "plain" = "class") {
     super(
-      `Type "${name}" is not mapped in this DbContext. Add it to ormModule({ entities: [...] }) and annotate it with @Entity().`,
+      kind === "dynamic"
+        ? `No entity or dynamic model named "${name}" is registered in this DbContext. Register a dynamic table first: options.model.registerModel(buildDynamicModel({ name: "${name}", fields: [...] })).`
+        : kind === "plain"
+          ? `A plain object is not an entity class. For a dynamic table add the row through its set: db.setByName("Table").add(row).`
+          : `Type "${name}" is not mapped in this DbContext. Add it to ormModule({ entities: [...] }) and annotate it with @Entity().`,
     );
   }
 }

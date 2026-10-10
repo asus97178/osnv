@@ -70,6 +70,9 @@ export class OrmModel {
 
   /** Model for an instance, by its constructor. */
   requireForInstance(entity: object): EntityModel {
+    // Rows of dynamic tables are plain objects; their model is known only to setByName().
+    const prototype = Object.getPrototypeOf(entity);
+    if (prototype === Object.prototype || prototype === null) throw new EntityNotMappedError("Object", "plain");
     return this.requireByCtor(entity.constructor as EntityClass);
   }
 
