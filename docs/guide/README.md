@@ -65,7 +65,7 @@ bazis — модульный бэкенд-фреймворк для [Bun](https:
 - ✅ [Немедленные изменения](database/immediate.md) — `executeUpdate`, `executeDelete`, `insertIfAbsent`, мягкое удаление, ограничения и отслеживание
 - ✅ [Управление схемой](database/schema.md) — `ensureCreated`, миграции и базовая точка, `migrateOnStart`, несколько модулей, имена ограничений
 - ✅ [Репозитории](database/repositories.md) — `IRepository<T>`, общий контекст, экспорт в другой модуль, подмена в тестах
-- ⏳ Owned stores
+- ✅ [Owned stores](database/owned-stores.md) — таблицы, закреплённые за модулем: объявление, правила области, переход на новую версию
 - ⏳ Динамические модели
 - ⏳ Ошибки базы данных
 
