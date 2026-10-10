@@ -34,14 +34,19 @@ export class Rs256Algorithm implements SigningAlgorithm {
     if (keys === null || typeof keys !== "object" || Array.isArray(keys)) {
       throw new TypeError("RS256 key material must be an object");
     }
-    this.keys = Object.freeze({ ...keys });
     for (const field of ["publicKeyPem", "privateKeyPem", "keyId"] as const) {
-      const value = this.keys[field];
+      const value = keys[field];
       if (value === undefined && field !== "publicKeyPem") continue;
       if (typeof value !== "string" || value.length === 0) {
         throw new TypeError(`RS256 ${field} must be a non-empty string`);
       }
     }
+    // A wrong key format must fail here, at startup, not on the first sign-in.
+    this.keys = Object.freeze({
+      ...keys,
+      publicKeyPem: checkedPem("publicKeyPem", keys.publicKeyPem),
+      ...(keys.privateKeyPem === undefined ? {} : { privateKeyPem: checkedPem("privateKeyPem", keys.privateKeyPem) }),
+    });
     this.canSign = this.keys.privateKeyPem !== undefined;
     this.keyId = this.keys.keyId;
   }
@@ -78,13 +83,13 @@ export class Rs256Algorithm implements SigningAlgorithm {
     if (this.keys.privateKeyPem === undefined) {
       throw new Error("RS256 private key PEM is required for signing");
     }
-    const key = await crypto.subtle.importKey(
+    const key = await importKey("private", () => crypto.subtle.importKey(
       "pkcs8",
-      decodePemToBuffer(this.keys.privateKeyPem),
+      decodePemToBuffer(this.keys.privateKeyPem!),
       RSA_PARAMS,
       false,
       ["sign"],
-    );
+    ));
     return this.cachedPrivate = this.requireStrongKey(key);
   }
 
@@ -92,13 +97,13 @@ export class Rs256Algorithm implements SigningAlgorithm {
     if (this.cachedPublic !== undefined) {
       return this.cachedPublic;
     }
-    const key = await crypto.subtle.importKey(
+    const key = await importKey("public", () => crypto.subtle.importKey(
       "spki",
       decodePemToBuffer(this.keys.publicKeyPem),
       RSA_PARAMS,
       true,
       ["verify"],
-    );
+    ));
     return this.cachedPublic = this.requireStrongKey(key);
   }
 
@@ -109,6 +114,39 @@ export class Rs256Algorithm implements SigningAlgorithm {
       throw new RangeError("RS256 keys must be at least 2048 bits");
     }
     return key;
+  }
+}
+
+const PEM = /^-----BEGIN ([A-Z0-9 ]+)-----\n([\s\S]*?)\n?-----END \1-----$/;
+
+/**
+ * Normalizes and checks one PEM string: literal `\n` (a key stored on one line
+ * in .env or a CI secret) and CRLF become line breaks; the label must be the
+ * one Web Crypto imports (PKCS#8 private, SPKI public), with a fix otherwise.
+ */
+function checkedPem(field: "publicKeyPem" | "privateKeyPem", value: string): string {
+  // A backslash never occurs in base64 or PEM armor, so this cannot change a valid key.
+  const pem = value.replaceAll("\\n", "\n").replaceAll("\r\n", "\n").trim();
+  const expected = field === "publicKeyPem" ? "PUBLIC KEY" : "PRIVATE KEY";
+  const match = PEM.exec(pem);
+  const label = match?.[1] ?? /^-----BEGIN ([A-Z0-9 ]+)-----/.exec(pem)?.[1];
+  if (label === undefined) throw new TypeError(`RS256 ${field} is not a PEM: expected "-----BEGIN ${expected}-----"`);
+  if (field === "privateKeyPem" && label === "RSA PRIVATE KEY") throw new TypeError("RS256 privateKeyPem is a PKCS#1 key (BEGIN RSA PRIVATE KEY); convert it to PKCS#8: openssl pkcs8 -topk8 -nocrypt -in key.pem -out key-pkcs8.pem");
+  if (field === "privateKeyPem" && label === "ENCRYPTED PRIVATE KEY") throw new TypeError("RS256 privateKeyPem is encrypted; remove the passphrase first: openssl pkcs8 -in key.pem -out key-plain.pem");
+  if (field === "privateKeyPem" && label.endsWith("PUBLIC KEY")) throw new TypeError("RS256 privateKeyPem contains a PUBLIC KEY; pass the private key (BEGIN PRIVATE KEY)");
+  if (field === "publicKeyPem" && label === "RSA PUBLIC KEY") throw new TypeError("RS256 publicKeyPem is a PKCS#1 public key (BEGIN RSA PUBLIC KEY); convert it to SPKI: openssl rsa -RSAPublicKey_in -in public.pem -pubout -out public-spki.pem");
+  if (field === "publicKeyPem" && label.endsWith("PRIVATE KEY")) throw new TypeError("RS256 publicKeyPem contains a private key; give verifiers only the public key: openssl pkey -in key.pem -pubout -out public.pem");
+  if (label !== expected || match === undefined || match === null) throw new TypeError(`RS256 ${field} is not a PEM: expected "-----BEGIN ${expected}-----"`);
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(match[2]!)) throw new TypeError(`RS256 ${field} has an invalid base64 body`);
+  return pem;
+}
+
+/** Web Crypto says only "Invalid keyData"; name the key that failed. */
+async function importKey(which: "private" | "public", work: () => Promise<CryptoKey>): Promise<CryptoKey> {
+  try {
+    return await work();
+  } catch (error) {
+    throw new Error(`RS256 ${which} key could not be imported (${error instanceof Error ? error.message : String(error)}); check that it is an RSA ${which === "private" ? "PKCS#8 private" : "SPKI public"} key in PEM`, { cause: error });
   }
 }
 

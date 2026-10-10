@@ -58,6 +58,13 @@ JwtKeyRing it selects exactly one trusted strategy from a local Map.
 | signingInput | string, header.payload | sign/verify | no / none | The UTF-8 bytes are passed to the crypto algorithm |
 | signature | Uint8Array | verify | no / none | A signature mismatch returns false |
 
+Since 0.98.26 `rs256()` normalizes and checks both PEM strings when it is created:
+literal `\n` sequences (a key kept on one line in .env or a CI secret) and CRLF become
+line breaks, and the armor label must be `PRIVATE KEY` (PKCS#8) or `PUBLIC KEY` (SPKI).
+A PKCS#1 key, an encrypted key, swapped keys, a non-PEM string or an invalid base64 body
+give a TypeError naming the field and the openssl command that fixes it. A key that
+still fails the Web Crypto import gives an Error naming the key, with the provider error
+as `cause`.
 The minimum RSA size is checked on the lazy import before use.
 Key configuration errors are TypeError/RangeError or Web Crypto errors.
 They are not disguised as errors of an untrusted JWT. Keys are kept in the instance
@@ -173,7 +180,7 @@ The validate result: Promise<VerifiedToken> with the original decoded header/pay
 JwtMalformedError: format/UTF-8/JOSE; JwtAlgorithmError: alg;
 JwtSignatureError: a wrong signature; JwtClaimError: a claim or kid type/value;
 JwtExpiredError/JwtNotYetValidError: time. Cryptographic operational failures pass
-through as provider errors. The HTTP adapter maps JwtError to 401.
+through as provider errors. Since 0.98.26 a JwtError escaping an `@Authorize` check is answered with 401 and `WWW-Authenticate: Bearer` (core/http `authorizeComposer`); elsewhere it stays an unexpected error.
 
 ### TokenIssuer(config), issue(subject, claims?), verifyAccess, verifyRefresh, rotate
 
