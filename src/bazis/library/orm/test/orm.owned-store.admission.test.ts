@@ -140,7 +140,8 @@ async function hostile(raw: unknown): Promise<void> {
 function exact(error: unknown, code: OrmOwnedStoreAdmissionError["code"]): void {
   expect(error).toBeInstanceOf(OrmOwnedStoreAdmissionError);
   if (!(error instanceof OrmOwnedStoreAdmissionError)) throw new Error("expected owned-store admission error");
-  expect(error.name).toBe("OrmOwnedStoreAdmissionError"); expect(error.code).toBe(code); expect(error.message).toBe(code);
+  // Since 0.98.23 the code is followed by an explanation built from trusted names.
+  expect(error.name).toBe("OrmOwnedStoreAdmissionError"); expect(error.code).toBe(code); expect(error.message === code || error.message.startsWith(`${code}: `)).toBe(true);
   expect(Object.hasOwn(error, "cause")).toBe(false); expect(providerEffects).toBe(0);
 }
 function rawInvalid(expectedSchema: unknown): OwnedStoreAdmissionRequestV1 {
@@ -378,7 +379,7 @@ async function admissionError(work: () => Promise<unknown>, code: OrmOwnedStoreA
   try { await work(); } catch (error) { caught = error; }
   expect(caught).toBeInstanceOf(OrmOwnedStoreAdmissionError);
   if (!(caught instanceof OrmOwnedStoreAdmissionError)) throw new Error("expected owned-store admission error");
-  expect(Object.getPrototypeOf(caught)).toBe(OrmOwnedStoreAdmissionError.prototype); expect(caught.name).toBe("OrmOwnedStoreAdmissionError"); expect(caught.code).toBe(code); expect(caught.message).toBe(code); expect(Object.hasOwn(caught, "cause")).toBe(false); expect(providerEffects).toBe(0);
+  expect(Object.getPrototypeOf(caught)).toBe(OrmOwnedStoreAdmissionError.prototype); expect(caught.name).toBe("OrmOwnedStoreAdmissionError"); expect(caught.code).toBe(code); expect(caught.message === code || caught.message.startsWith(`${code}: `)).toBe(true); expect(Object.hasOwn(caught, "cause")).toBe(false); expect(providerEffects).toBe(0);
 }
 test("server context validates a returned value before Registry access", async () => {
   for (const [value, code] of [["63", "ORM_OWNED_STORE_DRIFT"], [62n, "ORM_OWNED_STORE_PROVIDER_UNSUPPORTED"]] as const) {

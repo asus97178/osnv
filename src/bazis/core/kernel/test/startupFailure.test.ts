@@ -26,3 +26,8 @@ test("secrets in a startup failure are redacted and non-errors are inspected", (
   expect(formatStartupFailure(new Error("connect failed: password=hunter2"))).not.toContain("hunter2");
   expect(formatStartupFailure({ reason: "x" })).toContain("reason");
 });
+
+test("a message that already starts with its code is not prefixed twice", () => {
+  const error = Object.assign(new Error("ORM_OWNED_STORE_DRIFT: Owned store \"acme.notes\" differs."), { name: "OrmOwnedStoreAdmissionError", code: "ORM_OWNED_STORE_DRIFT" });
+  expect(formatStartupFailure(error).split("\n")[0]).toBe('OrmOwnedStoreAdmissionError: ORM_OWNED_STORE_DRIFT: Owned store "acme.notes" differs.');
+});

@@ -37,6 +37,9 @@ export function formatStartupFailure(error: unknown): string {
 }
 
 function codeOf(error: Error): string {
+  const own = (error as unknown as Record<string, unknown>).code;
+  // A message that already starts with its code ("ORM_X: …") is not prefixed twice.
+  if (typeof own === "string" && error.message.startsWith(own)) return "";
   // Node style: `Error [ERR_X]: message`; a database error code such as 42P01 follows it.
   const fields = ["code", "errno"].flatMap((name) => {
     const value = (error as unknown as Record<string, unknown>)[name];

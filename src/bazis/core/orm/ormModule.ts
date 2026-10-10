@@ -110,8 +110,14 @@ function defineConnectionModule(provider: DatabaseProvider, healthCheck: boolean
 /** Single ORM registration entry point (see {@link OrmModuleConfig}). */
 export function ormModule<TContext extends DbContext>(config: OrmModuleConfig<TContext>): BazisModuleRef {
   if (config.ownedStore !== undefined) {
-    if (!config.context || !config.entities || config.entities.length === 0 || config.provider || config.ensureCreated || config.migrateOnStart || config.runMigrationsOnStart || config.migrations !== undefined) {
-      throw new OrmError("ORM owned store requires a context and entities and cannot compose startup schema or migration authority.");
+    if (!config.context || !config.entities || config.entities.length === 0) {
+      throw new OrmError("ORM owned store requires a context and entities.");
+    }
+    if (config.provider) {
+      throw new OrmError("ORM owned store uses the shared DATABASE_PROVIDER from @Infra; remove provider from this ormBazis entry.");
+    }
+    if (config.ensureCreated || config.migrateOnStart || config.runMigrationsOnStart || config.migrations !== undefined) {
+      throw new OrmError("ORM owned store creates and verifies its own tables; remove ensureCreated, migrateOnStart and migrations from this ormBazis entry.");
     }
     // Provider factories outlive this call. Keep their context/entity view
     // registration-local so a caller cannot mutate the descriptor afterwards
