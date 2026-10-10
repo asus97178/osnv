@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DbContext } from "../DbContext";
-import { ConcurrentTransactionScopeError, differentProviderMessage, OrmDatabaseTimeError, OrmProviderIdentityMismatchError, OrmTransactionScopeError } from "../errors";
+import { ConcurrentTransactionScopeError, differentProviderMessage, OrmDatabaseTimeError, OrmProviderIdentityMismatchError, OrmTransactionScopeError, translateDatabaseError } from "../errors";
 import { baseProvider, withPostgresScopeOptions, createObservedProvider, postgresTransactionCapability, rootAuthority, withProviderDispatchObserver, withoutProviderDispatchObserver, type CancellableProviderDispatch } from "../Providers/ormTransactionRuntime";
 import type { DatabaseProvider } from "../Providers/types";
 import { OrmTransaction, type OrmDatabaseTimeV1, type OrmTransactionScopeOptions } from "./OrmTransaction";
@@ -86,7 +86,9 @@ export function observedProvider(context: object, provider: DatabaseProvider): D
   const authority = rootAuthority(provider);
   const fence = <T>(operation: () => Promise<T>, view = views.getStore()): Promise<T> => {
     if (uncertainContexts.has(token)) return Promise.reject(new TransactionOutcomeUnknownError());
-    const guarded = () => operation().catch((error) => { if (postgresTransactionCapability(provider)?.isOutcomeUncertain?.(error)) uncertainContexts.add(token); throw error; });
+    // Known SQLSTATEs (unique, foreign key, check, not null, lock timeout)
+    // reach the context's caller as ORM errors; the outcome check sees the raw one.
+    const guarded = () => operation().catch((error) => { if (postgresTransactionCapability(provider)?.isOutcomeUncertain?.(error)) uncertainContexts.add(token); throw translateDatabaseError(error); });
     if (!view) return guarded();
     const frame = view.frame;
     if (frame.authority !== authority || !view.enrolled.has(token) || frame.state !== "active" || frame.activeChild !== undefined) {

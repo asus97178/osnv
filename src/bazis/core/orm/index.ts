@@ -10,6 +10,7 @@ export { OrmConnectionLifecycle, OrmLifecycle, OrmProviderReadyLifecycle } from 
 export { IRepository, repositoryFor } from "./repository";
 export { registerRepositories } from "./registerRepositories";
 export { paginate, type PageResult } from "./listQuery";
+export { databaseErrorStatus } from "./databaseErrorStatus";
 
 import { registerModuleMetadataExpander, type BazisModuleRef } from "../di";
 import { OrmOwnedStoreAdmissionError, type DbContext } from "../../library/orm";

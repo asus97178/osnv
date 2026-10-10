@@ -192,6 +192,89 @@ export class UniqueViolationError extends DbUpdateError {
   }
 }
 
+/** Reads a non-empty string field of a driver error. */
+function driverField(cause: object, name: string): string | undefined {
+  const value = (cause as Record<string, unknown>)[name];
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/** Copies the SQLSTATE so transaction-outcome checks see the same server rejection. */
+function copyServerCode(target: object, cause: object): void {
+  for (const name of ["errno", "code"]) {
+    const descriptor = Object.getOwnPropertyDescriptor(cause, name);
+    if (descriptor && "value" in descriptor) Object.defineProperty(target, name, { value: descriptor.value, enumerable: true });
+  }
+}
+
+/** A foreign key constraint was violated (SQLSTATE 23503). */
+export class ForeignKeyViolationError extends DbUpdateError {
+  readonly constraint: string | undefined;
+  readonly table: string | undefined;
+  constructor(cause: object) {
+    const constraint = driverField(cause, "constraint");
+    super(`Foreign key constraint${constraint === undefined ? "" : ` "${constraint}"`} violated: the row refers to a missing row, or a row that other rows refer to was deleted.`, { cause });
+    this.constraint = constraint;
+    this.table = driverField(cause, "table");
+    copyServerCode(this, cause);
+  }
+}
+
+/** A CHECK constraint was violated (SQLSTATE 23514). */
+export class CheckViolationError extends DbUpdateError {
+  readonly constraint: string | undefined;
+  readonly table: string | undefined;
+  constructor(cause: object) {
+    const constraint = driverField(cause, "constraint");
+    super(constraint === undefined ? "Check constraint violated." : `Check constraint "${constraint}" violated.`, { cause });
+    this.constraint = constraint;
+    this.table = driverField(cause, "table");
+    copyServerCode(this, cause);
+  }
+}
+
+/** A NOT NULL column got NULL (SQLSTATE 23502). */
+export class NotNullViolationError extends DbUpdateError {
+  readonly column: string | undefined;
+  readonly table: string | undefined;
+  constructor(cause: object) {
+    const column = driverField(cause, "column");
+    const table = driverField(cause, "table");
+    super(column === undefined ? "A NOT NULL column got NULL." : `Column "${column}"${table === undefined ? "" : ` of table "${table}"`} does not accept NULL.`, { cause });
+    this.column = column;
+    this.table = table;
+    copyServerCode(this, cause);
+  }
+}
+
+/** A lock was not granted within `lock_timeout` (SQLSTATE 55P03). */
+export class LockTimeoutError extends OrmError {
+  constructor(cause: object) {
+    super("A lock was not granted within lockTimeoutMs: another transaction holds the row or table. Retry the operation, or shorten the transaction that holds the lock.", { cause });
+    copyServerCode(this, cause);
+  }
+}
+
+const TRANSLATED: Readonly<Record<string, new (cause: object) => OrmError>> = {
+  "23505": UniqueViolationError,
+  "23503": ForeignKeyViolationError,
+  "23514": CheckViolationError,
+  "23502": NotNullViolationError,
+  "55P03": LockTimeoutError,
+};
+
+/**
+ * A driver error with a known SQLSTATE as its ORM error (unique, foreign key,
+ * check, not-null violation, lock timeout); anything else unchanged. The
+ * original error is `cause`; messages carry constraint and column names only,
+ * never row values.
+ */
+export function translateDatabaseError(error: unknown): unknown {
+  if (error === null || typeof error !== "object" || error instanceof OrmError) return error;
+  const errno = Object.getOwnPropertyDescriptor(error, "errno");
+  const Translated = errno && "value" in errno && typeof errno.value === "string" ? TRANSLATED[errno.value] : undefined;
+  return Translated === undefined ? error : new Translated(error);
+}
+
 /** The entity failed validation before saving. */
 export class OrmValidationError extends DbUpdateError {
   constructor(

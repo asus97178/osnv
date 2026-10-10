@@ -31,7 +31,7 @@ for (const kind of ["query", "execute"] as const) {
     const cause = Object.assign(new Error("connection closed"), { code: "ERR_POSTGRES_CONNECTION_CLOSED" });
     const f = fixture(cause), wrapped = withRetry(f.provider, { maxRetries: 2, baseDelayMs: 0, isTransient: () => true });
     try {
-      await expect(wrapped[kind]("write", [])).rejects.toMatchObject({ code: "ORM_TRANSACTION_OUTCOME_UNKNOWN", phase: "commit", cause });
+      await expect(wrapped[kind]("write", [])).rejects.toMatchObject({ code: "ORM_TRANSACTION_OUTCOME_UNKNOWN", phase: "statement", cause });
       expect(f.calls.filter(sql => sql === "write")).toHaveLength(1);
       expect(f.calls.indexOf("close")).toBeLessThan(f.calls.indexOf("release"));
       expect(f.telemetry.find(event => event.operation === kind)?.outcome).toBe("unknown");
@@ -68,7 +68,7 @@ for (const mode of ["admission", "synchronous"] as const) test(`${mode}: failure
 test("autocommit timeout returns unknown and closes the retained owner", async () => {
   const f = fixture(undefined, { held: true });
   try {
-    await expect(f.provider.execute("write", [])).rejects.toMatchObject({ code: "ORM_TRANSACTION_OUTCOME_UNKNOWN", phase: "commit" });
+    await expect(f.provider.execute("write", [])).rejects.toMatchObject({ code: "ORM_TRANSACTION_OUTCOME_UNKNOWN", phase: "statement" });
     expect(f.calls.indexOf("close")).toBeLessThan(f.calls.indexOf("release"));
     expect(f.provider.statistics().pendingNativeOperations).toBe(0);
   } finally { await f.provider.close(); }

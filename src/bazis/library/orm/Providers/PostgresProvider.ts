@@ -749,7 +749,7 @@ export class PostgresProvider implements DatabaseProvider {
         // Both query() and execute() can write in autocommit mode. Once handed
         // to the driver, a missing reply is not proof that replay is safe.
         if (autocommit && nativeQuery !== undefined && !isConfirmedStatementRejection(error)) {
-          const unknown = this.uncertainty(error);
+          const unknown = this.uncertainty(error, "statement");
           if (owner) {
             owner.unknownOutcome ??= unknown;
             owner.state = "quarantined";
@@ -1205,7 +1205,7 @@ export class PostgresProvider implements DatabaseProvider {
     } catch { return false; }
   }
 
-  private uncertainty(cause?: unknown, phase: "commit" | "cancellation" = "commit"): TransactionOutcomeUnknownError {
+  private uncertainty(cause?: unknown, phase: "commit" | "cancellation" | "statement" = "commit"): TransactionOutcomeUnknownError {
     const error = new TransactionOutcomeUnknownError(cause, phase); this.uncertainErrors.add(error); return error;
   }
 
