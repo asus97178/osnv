@@ -265,4 +265,4 @@ ensureCreated in every module.
 
 - [Сущности и ключи](entities.md)
 - [Немедленные изменения](immediate.md)
-- Ошибки базы данных *(в работе)*
+- [Ошибки базы данных](errors.md)

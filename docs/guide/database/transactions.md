@@ -386,4 +386,4 @@ const rows = await this.db.database.transaction(async (t) => {
 - [Сохранение и отслеживание изменений](saving.md)
 - [Запросы](queries.md)
 - [Немедленные изменения](immediate.md)
-- Ошибки базы данных *(в работе)*
+- [Ошибки базы данных](errors.md)

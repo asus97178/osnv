@@ -193,4 +193,4 @@ await this.db.transactionScope(async () => {
 
 - [Сохранение и отслеживание изменений](saving.md)
 - [Транзакции](transactions.md)
-- Ошибки базы данных *(в работе)*
+- [Ошибки базы данных](errors.md)
