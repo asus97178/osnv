@@ -34,6 +34,7 @@ export { PRINCIPAL_STATE_KEY, type RequestPrincipal } from "./HttpContext/princi
 // Authorization
 export { Authorize, AllowAnonymous } from "./Authorization/Authorize";
 export { createAuthorizeComposer } from "./Authorization/authorizeComposer";
+export { bearerToken } from "./Authorization/bearerToken";
 export {
   resolveAuthorizeMeta,
   type AuthorizeCheck,

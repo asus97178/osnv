@@ -4,6 +4,22 @@ All notable changes to the `bazis` package. Versions follow
 [Semantic Versioning](https://semver.org); before 1.0 a minor version may
 contain breaking changes, a patch version does not.
 
+## 0.98.26 — 2026-10-11
+
+### Added
+
+- `bearerToken(ctx)` in `bazis/core/http`: the token of an `Authorization:
+  Bearer <token>` header, or `undefined` without the header, with another
+  scheme or with an empty token. The scheme is case-insensitive.
+
+### Fixed
+
+- A `JwtError` (missing, malformed, expired or forged token) escaping an
+  `@Authorize` check answered `500 Internal Server Error` and was logged as a
+  server failure when the check did not catch it. It is now `401
+  Unauthorized` with `WWW-Authenticate: Bearer`; the JWT error is the `cause`.
+  Other errors of a check are unchanged.
+
 ## 0.98.25 — 2026-10-11
 
 ### Added

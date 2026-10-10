@@ -173,7 +173,7 @@ The validate result: Promise<VerifiedToken> with the original decoded header/pay
 JwtMalformedError: format/UTF-8/JOSE; JwtAlgorithmError: alg;
 JwtSignatureError: a wrong signature; JwtClaimError: a claim or kid type/value;
 JwtExpiredError/JwtNotYetValidError: time. Cryptographic operational failures pass
-through as provider errors. The HTTP adapter maps JwtError to 401.
+through as provider errors. Since 0.98.26 a JwtError escaping an `@Authorize` check is answered with 401 and `WWW-Authenticate: Bearer` (core/http `authorizeComposer`); elsewhere it stays an unexpected error.
 
 ### TokenIssuer(config), issue(subject, claims?), verifyAccess, verifyRefresh, rotate
 
