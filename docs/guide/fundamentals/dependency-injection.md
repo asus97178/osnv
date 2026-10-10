@@ -269,12 +269,13 @@ export class DbController {
 запустится и завершится с кодом 1:
 
 ```text
-[bazis] application failed: {
-  name: 'Error',
-  message: 'database is unreachable',
-  ...
-}
+[bazis] application failed: Error: database is unreachable
+    at <anonymous> (src/app/infra/Db.ts:12:11)
+    ...
 ```
+
+Ошибка запуска печатается как `Имя [код]: сообщение` со стеком и причиной
+(`Caused by:`) — с версии 0.98.20. Раньше выводился весь объект ошибки.
 
 Это лучше, чем сервер, который стартовал и отвечает `500` на каждый запрос.
 

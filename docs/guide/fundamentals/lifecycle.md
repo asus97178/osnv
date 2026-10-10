@@ -169,8 +169,12 @@ HTTP-сервер не запускаются, вызывается `onDestroy`,
 ```text
 hook: onInit
 hook: onDestroy
-[bazis] application failed: { name: 'Error', message: 'schema is not ready', ... }
+[bazis] application failed: Error: schema is not ready
+    at onInit (src/app/WarmupHook.ts:3:11)
 ```
+
+Ошибка запуска печатается как `Имя [код]: сообщение` со стеком и причиной
+(`Caused by:`) — с версии 0.98.20. Раньше выводился весь объект ошибки.
 
 Для коротких реакций есть `ApplicationLifetime`: `onStarted`, `onStopping`,
 `onStopped`. Подписка на уже наступившее событие выполняется сразу (с
