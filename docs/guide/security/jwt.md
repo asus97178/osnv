@@ -356,5 +356,6 @@ PEM) — это `TypeError` или `RangeError` при запуске, а не `
 ## Дальше
 
 - [Авторизация](../overview/authorization.md)
+- [Шаблоны авторизации](authorization-patterns.md)
 - [Транзакции](../database/transactions.md)
 - [Конфигурация](../fundamentals/configuration.md)

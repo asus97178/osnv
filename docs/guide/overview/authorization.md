@@ -255,3 +255,4 @@ Middleware уместнее для того, что касается всех з
 - [Модели запросов и валидация](validation.md)
 - [Обработка ошибок](errors.md)
 - [Аутентификация через JWT](../security/jwt.md)
+- [Шаблоны авторизации](../security/authorization-patterns.md)
