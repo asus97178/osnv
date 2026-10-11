@@ -143,6 +143,7 @@ export class ModelBuilder {
       relations,
       foreignKeys,
       queryFilters: raw.queryFilters ?? [],
+      contextQueryFilters: raw.contextQueryFilters ?? [],
       softDeleteProperty: raw.softDeleteProperty,
       propertyByName: (name: string) => byName.get(name),
       relationByName: (name: string) => relationByName.get(name),

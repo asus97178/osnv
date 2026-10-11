@@ -131,6 +131,8 @@ export interface EntityModel {
   readonly foreignKeys: readonly ForeignKeyModel[];
   /** Global query filters (`@QueryFilter`), applied to every SELECT. */
   readonly queryFilters: readonly Condition[];
+  /** Query filters that read the query's `DbContext`; evaluated per query (see `effectiveQueryFilters`). */
+  readonly contextQueryFilters?: readonly import("./decorators").ContextQueryFilter[];
   /** Soft-delete property name (NULL = not deleted). `@SoftDelete` / `@Entity({ softDelete })`. */
   readonly softDeleteProperty?: string;
   /** Property by name. */

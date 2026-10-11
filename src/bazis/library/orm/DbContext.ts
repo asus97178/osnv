@@ -36,7 +36,7 @@ export abstract class DbContext {
     this.#options = options;
     this.changeTracker = new ChangeTracker();
     const provider = observedProvider(this, options.provider);
-    this.#runtime = { provider, models: options.model, tracker: this.changeTracker, runImmediateOperation: (operation) => monitorImmediateOperation(this, operation) };
+    this.#runtime = { context: this, provider, models: options.model, tracker: this.changeTracker, runImmediateOperation: (operation) => monitorImmediateOperation(this, operation) };
     this.database = new DatabaseFacade(provider, options.model);
   }
 

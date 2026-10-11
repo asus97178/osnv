@@ -6,6 +6,7 @@ import { IncludeLoader } from "./IncludeLoader";
 import { materialize, materializeProjection } from "./materialize";
 import { EMPTY_PLAN, withCondition, withOrder, type QueryPlan } from "./QueryPlan";
 import { SqlTranslator } from "./SqlTranslator";
+import { effectiveQueryFilters } from "./queryFilters";
 import { executeImmediateDelete, executeImmediateUpdate, type OrmMutationResultV1, type OrmUpdateValuesV1 } from "./ImmediateMutations";
 
 export interface ForUpdateOptionsV1 { readonly skipLocked?: boolean; }
@@ -144,7 +145,7 @@ export class EntityQuery<T extends object, TResult = T> {
   }
 
   protected translator(): SqlTranslator {
-    return new SqlTranslator(this.model, this.runtime.provider.dialect);
+    return new SqlTranslator(this.model, this.runtime.provider.dialect, this.plan.ignoreQueryFilters ? [] : effectiveQueryFilters(this.model, this.runtime.context));
   }
 
   async toList(): Promise<TResult[]> {

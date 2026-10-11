@@ -8,6 +8,7 @@ import type { SqlParam } from "../Providers/types";
 import type { QueryPlan } from "./QueryPlan";
 import { Operand, type Condition, type FieldSelector } from "./conditions";
 import { SqlTranslator } from "./SqlTranslator";
+import { effectiveQueryFilters } from "./queryFilters";
 
 export interface OrmMutationResultV1 { readonly affectedRows: number; }
 export interface OrmInsertIfAbsentResultV1 { readonly inserted: boolean; }
@@ -17,7 +18,7 @@ export type OrmUniqueKeySelectorV1<T extends object> = (entity: FieldSelector<T>
 export function executeImmediateUpdate<T extends object>(model: EntityModel, runtime: DbContextRuntime, plan: QueryPlan, values: OrmUpdateValuesV1<T>): Promise<OrmMutationResultV1> {
   return runtime.runImmediateOperation(async () => {
     guard(model, runtime); const admittedPlan = admitPlan(plan, "executeUpdate");
-    const conditions = effectiveConditions(model, admittedPlan); const assignments = encodeAssignments(runtime, admitUpdateValues(model, values));
+    const conditions = effectiveConditions(model, admittedPlan, runtime); const assignments = encodeAssignments(runtime, admitUpdateValues(model, values));
     const compiled = new SqlTranslator(model, runtime.provider.dialect).immediateUpdate(assignments, conditions, (property, value) => encode(runtime, property, snapshot(value), true));
     Object.freeze(compiled.params);
     guard(model, runtime);
@@ -28,7 +29,7 @@ export function executeImmediateUpdate<T extends object>(model: EntityModel, run
 
 export function executeImmediateDelete(model: EntityModel, runtime: DbContextRuntime, plan: QueryPlan): Promise<OrmMutationResultV1> {
   return runtime.runImmediateOperation(async () => {
-    guard(model, runtime); const admittedPlan = admitPlan(plan, "executeDelete"); const conditions = effectiveConditions(model, admittedPlan);
+    guard(model, runtime); const admittedPlan = admitPlan(plan, "executeDelete"); const conditions = effectiveConditions(model, admittedPlan, runtime);
     const compiled = new SqlTranslator(model, runtime.provider.dialect).immediateDelete(conditions, (property, value) => encode(runtime, property, snapshot(value), true));
     Object.freeze(compiled.params);
     guard(model, runtime);
@@ -177,8 +178,8 @@ function conflictTarget<T extends object>(model: EntityModel, options: { readonl
   return Object.freeze(columns as string[]);
 }
 
-function effectiveConditions(model: EntityModel, plan: AdmittedImmediatePlan): readonly Condition[] {
-  const source: Condition[] = plan.ignoreQueryFilters ? [] : readConditionList(model.queryFilters);
+function effectiveConditions(model: EntityModel, plan: AdmittedImmediatePlan, runtime: DbContextRuntime): readonly Condition[] {
+  const source: Condition[] = plan.ignoreQueryFilters ? [] : readConditionList([...effectiveQueryFilters(model, runtime.context)]);
   if (!plan.ignoreQueryFilters && model.softDeleteProperty) source.push({ kind: "null", property: model.softDeleteProperty, negated: false });
   source.push(...plan.explicitConditions); const active = new Set<object>(); const memo = new WeakMap<object, Condition>();
   return Object.freeze(source.map((condition) => cloneCondition(model, condition, active, memo)));

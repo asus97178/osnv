@@ -479,3 +479,18 @@ bazis does not read. Checks:
 [orm.owned-store.messages.test.ts](../../core/orm/test/orm.owned-store.messages.test.ts)
 and the live
 [orm.owned-store.messages.postgres.live.test.ts](../../core/orm/test/orm.owned-store.messages.postgres.live.test.ts).
+
+## 15. Query filters with the context (2026-10-11)
+
+`@QueryFilter((entity) => …)` is evaluated once when the class is declared and
+stays in `EntityModel.queryFilters`. Since 0.98.28 a filter with a second
+parameter, `@QueryFilter<T, C>((entity, context) => …)`, is kept in
+`EntityModel.contextQueryFilters` and evaluated per query by
+`Query/queryFilters.ts` `effectiveQueryFilters(model, runtime.context)`;
+`DbContextRuntime.context` is the owning DbContext. The two forms are told
+apart by the function's declared parameter count. `SqlTranslator` takes the
+effective filters (default: the fixed ones), so `EntityQuery` (queries, `find`,
+`count`), `IncludeLoader` and `ImmediateMutations` apply the same set;
+`ignoreQueryFilters()` skips evaluation entirely. A filter that throws fails
+the query before SQL. Checks:
+[orm.context-query-filter.test.ts](test/orm.context-query-filter.test.ts).

@@ -215,3 +215,17 @@ navigation copies the target's key into the foreign key properties; an entity in
 `@OneToMany` array gets the parent's key. Only entities tracked by the same context are followed,
 and the navigation wins over a different foreign key value. Regression:
 `library/orm/test/orm.navigation-fixup.test.ts`.
+
+## Context constructor dependencies (2026-10-11)
+
+Since 0.98.28 the `ormBazis` factory creates a context with
+`factoryProviderWithResolver`: `DbContextOptions` first, then the rest of its
+codegen-recorded constructor dependencies resolved in the request scope
+through the DI-internal `resolveDependencyList` (the synthetic resolution plan
+is cached per context class). Without generated dependencies the context gets
+only its options, as before. The first generated dependency must be
+`DbContextOptions`; otherwise an `OrmError` names the context. These
+dependencies are resolved at runtime like `ctx.services`; module
+encapsulation does not check them. Checks:
+[orm.context-dependencies.test.ts](test/orm.context-dependencies.test.ts).
+

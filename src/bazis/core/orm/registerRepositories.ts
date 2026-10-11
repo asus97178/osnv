@@ -3,7 +3,9 @@ import { Repository, type DbContext, type DbContextOptions } from "../../library
 import { repositoryFor } from "./repository";
 
 type EntityClass = new () => object;
-type ContextClass<TContext extends DbContext> = new (options: DbContextOptions) => TContext;
+/** A DbContext subclass: `DbContextOptions` first, then its own constructor dependencies (since 0.98.28). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ContextClass<TContext extends DbContext> = new (options: DbContextOptions, ...dependencies: any[]) => TContext;
 
 /**
  * Registers a scoped `IRepository<T>` for each context entity and the

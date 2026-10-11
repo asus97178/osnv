@@ -4,6 +4,22 @@ All notable changes to the `bazis` package. Versions follow
 [Semantic Versioning](https://semver.org); before 1.0 a minor version may
 contain breaking changes, a patch version does not.
 
+## 0.98.28 — 2026-10-11
+
+### Added
+
+- A `DbContext` subclass may take its own constructor dependencies after
+  `DbContextOptions`, resolved from the request scope like any service:
+  `constructor(options: DbContextOptions, private readonly user: CurrentUser)`.
+  Codegen records them; `ormBazis` passes them in. A context whose first
+  parameter is not `DbContextOptions` fails with a message saying so.
+- `@QueryFilter` with a second parameter receives the `DbContext` of each
+  query: `@QueryFilter<Note, NotesDb>((n, db) => n.tenantId.eq(db.tenantId))`.
+  It is evaluated per query and applies to queries, `find`, `count`, `include`
+  and immediate mutations; `ignoreQueryFilters()` turns it off. If it throws
+  (no tenant in this request), the query fails instead of running unfiltered.
+  A one-parameter `@QueryFilter` stays fixed at declaration as before.
+
 ## 0.98.27 — 2026-10-11
 
 ### Added

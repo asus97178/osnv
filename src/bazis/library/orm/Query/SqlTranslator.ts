@@ -35,9 +35,11 @@ export function quotedColumnList(model: EntityModel, dialect: SqlDialect): strin
  * parameter array (no concatenation of user data).
  */
 export class SqlTranslator {
+  /** `filters`: the query filters to apply (see `effectiveQueryFilters`); the model's fixed ones by default. */
   constructor(
     private readonly model: EntityModel,
     private readonly dialect: SqlDialect,
+    private readonly filters: readonly Condition[] = model.queryFilters,
   ) {}
 
   /** SELECT of all columns (or a projection) with WHERE/ORDER/LIMIT/OFFSET. */
@@ -98,7 +100,7 @@ export class SqlTranslator {
   private whereClause(plan: QueryPlan, params: SqlParam[], encode: ConditionValueEncoder = (property, value) => encodeProperty(property, value, this.dialect)): string {
     const parts: string[] = [];
     if (!plan.ignoreQueryFilters) {
-      for (const filter of this.model.queryFilters) {
+      for (const filter of this.filters) {
         parts.push(this.condition(filter, params, encode));
       }
       if (this.model.softDeleteProperty) {

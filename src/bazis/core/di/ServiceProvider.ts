@@ -15,6 +15,7 @@ import { ServiceRegistry } from "./internal/ServiceRegistry";
 import { ResolutionTracker, type ResolutionActivation } from "./internal/ResolutionTracker";
 import { ScopeLifecycle } from "./internal/ScopeLifecycle";
 import { ServiceScope } from "./ServiceScope";
+import { RESOLVE_DEPENDENCY_LIST } from "./internal/resolveDependencyList";
 import { getConstructorDeps, getProviderDeps } from "./internal/providerDeps";
 import type { BuildServiceProviderOptions, ServiceKey, ServiceResolver } from "./types";
 import type {
@@ -550,7 +551,29 @@ export class ServiceProvider implements ServiceResolver {
         return this.tryResolveInternal(token, key, scopeState, stack(), ownerLifetime);
       },
       has: (token: Token<unknown>, key?: ServiceKey): boolean => this.has(token, key),
-    };
+      [RESOLVE_DEPENDENCY_LIST]: (key: object, deps: ProviderDependencyList): unknown[] => {
+        assertOriginScopeLive();
+        return this.resolveListIn(key, deps, scopeState, stack(), ownerLifetime);
+      },
+    } as ServiceResolver;
+  }
+
+  /** @internal See resolveDependencyList: the root resolver is the provider itself. */
+  [RESOLVE_DEPENDENCY_LIST](key: object, deps: ProviderDependencyList): unknown[] {
+    return this.resolveListIn(key, deps, this.lifetime.root, [], undefined);
+  }
+
+  // A dependency list resolved outside a registered provider (a DbContext's
+  // generated constructor dependencies). The synthetic provider is cached per
+  // key, so its plan is built once like any provider's.
+  private readonly listProviders = new WeakMap<object, Provider<unknown>>();
+  private resolveListIn(key: object, deps: ProviderDependencyList, scopeState: ResolutionScopeState, stack: ResolutionActivation[], ownerLifetime: ProviderLifetime | undefined): unknown[] {
+    let provider = this.listProviders.get(key);
+    if (provider === undefined || getProviderDeps(provider) !== deps) {
+      provider = { provide: key as Token<unknown>, useFactory: () => undefined, deps } as unknown as Provider<unknown>;
+      this.listProviders.set(key, provider);
+    }
+    return this.resolveDeps(this.getPlan(provider), scopeState, stack, ownerLifetime ?? "scoped");
   }
 
   private resolveDeps(
