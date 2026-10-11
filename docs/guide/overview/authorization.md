@@ -142,6 +142,12 @@ export function currentUser(ctx: HttpContext): UserPrincipal {
 }
 ```
 
+> [!TIP]
+> С версии 0.98.26 проверку можно сократить: `bearerToken(ctx)` достаёт
+> токен из заголовка, а `JwtError`, вылетевший из проверки, сам становится
+> `401`. Так `try/catch` не нужен — см. [Аутентификация через
+> JWT](../security/jwt.md#проверка-в-authorize).
+
 Проверка — обычная функция без конструктора, поэтому сервисы она берёт из
 `ctx.services`, как и [middleware](middleware.md#сервисы-внутри-middleware).
 
@@ -248,3 +254,4 @@ Middleware уместнее для того, что касается всех з
 - [Middleware](middleware.md)
 - [Модели запросов и валидация](validation.md)
 - [Обработка ошибок](errors.md)
+- [Аутентификация через JWT](../security/jwt.md)
