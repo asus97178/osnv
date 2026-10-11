@@ -4,6 +4,17 @@ All notable changes to the `bazis` package. Versions follow
 [Semantic Versioning](https://semver.org); before 1.0 a minor version may
 contain breaking changes, a patch version does not.
 
+## 0.98.27 — 2026-10-11
+
+### Added
+
+- `anyOf(...checks)` in `bazis/core/http`: an `@Authorize` check that passes
+  when any of the checks passes (`@Authorize(a, b)` requires all of them).
+  Checks run in order and stop at the first that passes. When none passes the
+  request is `401` if every check failed as "not signed in"
+  (`UnauthorizedError` or a `JwtError`) and `403` otherwise; any other error
+  of a check propagates instead of turning into a silent `403`.
+
 ## 0.98.26 — 2026-10-11
 
 ### Added
