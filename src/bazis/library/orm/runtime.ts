@@ -7,6 +7,8 @@ import type { ChangeTracker } from "./Tracking/ChangeTracker";
  * module to break import cycles between the context, the set and the tracker.
  */
 export interface DbContextRuntime {
+  /** The DbContext that owns this runtime; context query filters read it. */
+  readonly context?: object;
   readonly provider: DatabaseProvider;
   readonly models: OrmModel;
   readonly tracker: ChangeTracker;

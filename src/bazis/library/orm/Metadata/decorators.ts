@@ -1,6 +1,6 @@
 import type { ColumnOptionsType, RelationKind, PropertyConvention } from "./types";
 import type { ValueConverter } from "./ValueConverter";
-import { evaluatePredicate, type PredicateFn } from "../Query/conditions";
+import { evaluatePredicate, type FieldSelector, type PredicateFn, type Predicate } from "../Query/conditions";
 import type { Condition } from "../Query/conditions";
 import { compileCheck, type CheckPredicate } from "../Schema/CheckExpression";
 
@@ -114,6 +114,8 @@ export interface RawEntity {
   properties: Map<string, RawProperty>;
   relations: RawRelation[];
   queryFilters?: Condition[];
+  /** `@QueryFilter((entity, context) => …)`: evaluated per query with the context. */
+  contextQueryFilters?: ContextQueryFilter[];
   /** Soft-delete property name (see `@SoftDelete` / `@Entity({ softDelete })`). */
   softDeleteProperty?: string;
   keyDeclaration?: { properties: readonly string[]; name?: string; anchor: string; composite: boolean };
@@ -135,7 +137,7 @@ function cloneRaw(source: RawEntity): RawEntity {
   for (const [name, prop] of source.properties) {
     properties.set(name, { ...prop, index: prop.index ? { ...prop.index } : undefined });
   }
-  return { ...source, properties, relations: source.relations.map((relation) => ({ ...relation })), keyDeclaration: source.keyDeclaration && { ...source.keyDeclaration, properties: [...source.keyDeclaration.properties] }, indexes: source.indexes?.map((index) => ({ ...index, properties: [...index.properties] })), foreignKeys: source.foreignKeys?.map((foreignKey) => ({ ...foreignKey, properties: [...foreignKey.properties] })), checks: source.checks?.map((check) => ({ ...check })), queryFilters: source.queryFilters?.map(cloneCondition) };
+  return { ...source, properties, relations: source.relations.map((relation) => ({ ...relation })), keyDeclaration: source.keyDeclaration && { ...source.keyDeclaration, properties: [...source.keyDeclaration.properties] }, indexes: source.indexes?.map((index) => ({ ...index, properties: [...index.properties] })), foreignKeys: source.foreignKeys?.map((foreignKey) => ({ ...foreignKey, properties: [...foreignKey.properties] })), checks: source.checks?.map((check) => ({ ...check })), queryFilters: source.queryFilters?.map(cloneCondition), contextQueryFilters: source.contextQueryFilters && [...source.contextQueryFilters] };
 }
 
 function cloneCondition(condition: Condition): Condition {
@@ -364,14 +366,30 @@ export function HasConversion(converter: ValueConverter) {
   };
 }
 
+/** A query filter that reads the `DbContext` of the query (a tenant, the current user). */
+export type ContextQueryFilter = (entity: FieldSelector<never>, context: never) => Predicate;
+
 /**
  * Global query filter for the entity (multi-tenant, flags and so on).
  * Applied automatically; disabled with `ignoreQueryFilters()`.
+ *
+ * With one parameter the filter is fixed when the class is declared:
+ * `@QueryFilter<Note>((n) => n.archived.eq(false))`. With a second parameter
+ * it receives the `DbContext` of each query and is evaluated then:
+ * `@QueryFilter<Note, NotesDb>((n, db) => n.tenantId.eq(db.tenantId))`. If it
+ * throws, the query fails instead of running unfiltered.
  */
-export function QueryFilter<T extends object>(predicate: PredicateFn<T>) {
+type QueryFilterDecorator = (value: abstract new (...args: never[]) => unknown, context: ClassDecoratorContext) => void;
+export function QueryFilter<T extends object>(predicate: PredicateFn<T>): QueryFilterDecorator;
+export function QueryFilter<T extends object, C extends object>(predicate: (entity: FieldSelector<T>, context: C) => Predicate): QueryFilterDecorator;
+export function QueryFilter<T extends object>(predicate: PredicateFn<T> | ((entity: FieldSelector<T>, context: never) => Predicate)): QueryFilterDecorator {
   return (_value: abstract new (...args: never[]) => unknown, context: ClassDecoratorContext): void => {
     const raw = ownRaw(context.metadata);
-    const node = evaluatePredicate(predicate, "@QueryFilter").node;
+    if (predicate.length >= 2) {
+      raw.contextQueryFilters = [...(raw.contextQueryFilters ?? []), predicate as unknown as ContextQueryFilter];
+      return;
+    }
+    const node = evaluatePredicate(predicate as PredicateFn<T>, "@QueryFilter").node;
     raw.queryFilters = [...(raw.queryFilters ?? []), node];
   };
 }

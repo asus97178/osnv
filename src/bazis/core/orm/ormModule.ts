@@ -20,7 +20,9 @@ import { OrmConnectionLifecycle } from "./OrmLifecycle";
 import { attachOrmGraphContribution, attachOwnedStoreRegistration } from "./ownedStoreContributions";
 
 type EntityClass = new () => object;
-type ContextClass<TContext extends DbContext> = new (options: DbContextOptions) => TContext;
+/** A DbContext subclass: `DbContextOptions` first, then its own constructor dependencies (since 0.98.28). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ContextClass<TContext extends DbContext> = new (options: DbContextOptions, ...dependencies: any[]) => TContext;
 
 /**
  * The single ORM registration shape. One function, three scenarios depending

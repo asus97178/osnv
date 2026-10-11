@@ -6,6 +6,7 @@ import type { DbContextRuntime } from "../runtime";
 import { materialize } from "./materialize";
 import { EMPTY_PLAN } from "./QueryPlan";
 import { SqlTranslator } from "./SqlTranslator";
+import { effectiveQueryFilters } from "./queryFilters";
 
 interface Level {
   readonly model: EntityModel;
@@ -156,7 +157,7 @@ export class IncludeLoader {
   }
 
   private async queryIn(model: EntityModel, property: string, values: readonly unknown[], noTracking: boolean): Promise<object[]> {
-    const translator = new SqlTranslator(model, this.runtime.provider.dialect);
+    const translator = new SqlTranslator(model, this.runtime.provider.dialect, effectiveQueryFilters(model, this.runtime.context));
     const result: object[] = [];
     const chunkSize = maxParametersPerInList(this.runtime.provider);
     for (let start = 0; start < values.length; start += chunkSize) {
@@ -180,7 +181,7 @@ export class IncludeLoader {
 
   private async queryTuples(model: EntityModel, properties: readonly string[], values: readonly (readonly unknown[])[], noTracking: boolean): Promise<object[]> {
     const result: object[] = []; const perTuple = properties.length; const chunkSize = Math.max(1, Math.floor(maxParametersPerInList(this.runtime.provider) / perTuple));
-    for (let start = 0; start < values.length; start += chunkSize) { const translator = new SqlTranslator(model, this.runtime.provider.dialect); const { sql, params } = translator.selectAll({ ...EMPTY_PLAN, conditions: [{ kind: "tuples", properties, values: values.slice(start, start + chunkSize) }], noTracking }); for (let entity of (await this.runtime.provider.query(sql, params)).map((row) => materialize<object>(model, row, this.runtime.provider.dialect))) { if (!noTracking) entity = this.runtime.tracker.trackLoaded(entity, model); result.push(entity); } }
+    for (let start = 0; start < values.length; start += chunkSize) { const translator = new SqlTranslator(model, this.runtime.provider.dialect, effectiveQueryFilters(model, this.runtime.context)); const { sql, params } = translator.selectAll({ ...EMPTY_PLAN, conditions: [{ kind: "tuples", properties, values: values.slice(start, start + chunkSize) }], noTracking }); for (let entity of (await this.runtime.provider.query(sql, params)).map((row) => materialize<object>(model, row, this.runtime.provider.dialect))) { if (!noTracking) entity = this.runtime.tracker.trackLoaded(entity, model); result.push(entity); } }
     return result;
   }
   private tuple(model: EntityModel, values: readonly unknown[]): string | undefined {
